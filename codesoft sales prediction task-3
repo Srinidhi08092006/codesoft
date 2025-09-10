@@ -1,0 +1,58 @@
+import numpy as np
+import pandas as pd
+
+# -----------------------------
+# Example dataset (Advertising vs Sales)
+# -----------------------------
+# Columns: TV, Radio, Newspaper, Sales
+data = {
+    "TV": [230.1, 44.5, 17.2, 151.5, 180.8, 8.7, 57.5, 120.2, 8.6, 199.8],
+    "Radio": [37.8, 39.3, 45.9, 41.3, 10.8, 48.9, 32.8, 19.6, 2.1, 2.6],
+    "Newspaper": [69.2, 45.1, 69.3, 58.5, 58.4, 75.0, 23.5, 11.6, 1.0, 21.2],
+    "Sales": [22.1, 10.4, 9.3, 18.5, 12.9, 7.2, 11.8, 13.2, 4.8, 10.6]
+}
+df = pd.DataFrame(data)
+
+X = df[["TV", "Radio", "Newspaper"]].values
+y = df["Sales"].values
+
+# -----------------------------
+# Add bias term
+# -----------------------------
+X_b = np.c_[np.ones((X.shape[0], 1)), X]
+
+# -----------------------------
+# Train-Test Split (80-20)
+# -----------------------------
+train_size = int(0.8 * len(X_b))
+X_train, X_test = X_b[:train_size], X_b[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# -----------------------------
+# Linear Regression using Normal Equation (pseudo-inverse)
+# -----------------------------
+theta = np.linalg.pinv(X_train.T.dot(X_train)).dot(X_train.T).dot(y_train)
+
+# Predictions
+y_pred = X_test.dot(theta)
+
+# -----------------------------
+# Evaluation
+# -----------------------------
+rmse = np.sqrt(np.mean((y_test - y_pred) ** 2))
+ss_total = np.sum((y_test - np.mean(y_test)) ** 2)
+ss_res = np.sum((y_test - y_pred) ** 2)
+r2 = 1 - (ss_res / ss_total)
+
+print("Model Coefficients:", theta)
+print("Predictions:", y_pred)
+print("RMSE:", rmse)
+print("R² Score:", r2)
+
+# -----------------------------
+# Predict Sales for new input
+# -----------------------------
+# Example: TV=150, Radio=20, Newspaper=15
+new_data = np.array([[1, 150, 20, 15]])  # include bias term
+predicted_sales = new_data.dot(theta)
+print("Predicted Sales for [TV=150, Radio=20, Newspaper=15]:", predicted_sales[0])
