@@ -1,0 +1,114 @@
+import pandas as pd
+import numpy as np
+
+# -------------------------
+# Example dataset (replace with your movies.csv)
+# -------------------------
+data = {
+    "Title": ["Inception", "The Dark Knight", "Titanic", "Avatar", "Interstellar"],
+    "Genre": ["Sci-Fi", "Action", "Romance", "Sci-Fi", "Sci-Fi"],
+    "Director": ["Christopher Nolan", "Christopher Nolan", "James Cameron", "James Cameron", "Christopher Nolan"],
+    "Actors": ["Leonardo DiCaprio, Tom Hardy", "Christian Bale, Heath Ledger", 
+               "Leonardo DiCaprio, Kate Winslet",
+               "Sam Worthington, Zoe Saldana", 
+               "Matthew McConaughey, Anne Hathaway"],
+    "Rating": [8.8, 9.0, 7.8, 7.9, 8.6]
+}
+df = pd.DataFrame(data)
+
+# -------------------------
+# Encoding categorical features manually
+# -------------------------
+def one_hot_encode(column):
+    """One-hot encode a categorical column"""
+    unique_vals = column.unique()
+    encoded = np.zeros((len(column), len(unique_vals)))
+    for i, val in enumerate(unique_vals):
+        encoded[:, i] = (column == val).astype(int)
+    return pd.DataFrame(encoded, columns=[f"{column.name}_{v}" for v in unique_vals])
+
+# Encode Genre and Director
+genre_encoded = one_hot_encode(df["Genre"])
+director_encoded = one_hot_encode(df["Director"])
+
+# Simple encoding for Actors (count number of actors)
+df["Num_Actors"] = df["Actors"].apply(lambda x: len(x.split(",")))
+
+# Final feature matrix
+X = pd.concat([genre_encoded, director_encoded, df["Num_Actors"]], axis=1).values
+y = df["Rating"].values
+
+# -------------------------
+# Manual Train-Test Split (80-20)
+# -------------------------
+train_size = int(0.8 * len(X))
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# -------------------------
+# Linear Regression using pseudo-inverse
+# -------------------------
+X_train_b = np.c_[np.ones((X_train.shape[0], 1)), X_train]  # add bias
+X_test_b = np.c_[np.ones((X_test.shape[0], 1)), X_test]
+
+theta = np.linalg.pinv(X_train_b.T.dot(X_train_b)).dot(X_train_b.T).dot(y_train)
+
+# Predictions
+y_pred = X_test_b.dot(theta)
+
+# -------------------------
+# Evaluation
+# -------------------------
+rmse = np.sqrt(np.mean((y_test - y_pred) ** 2))
+
+if len(y_test) > 1:
+    ss_total = np.sum((y_test - np.mean(y_test)) ** 2)
+    ss_res = np.sum((y_test - y_pred) ** 2)
+    r2 = 1 - (ss_res / ss_total)
+else:
+    r2 = None  # not defined for single test sample
+
+print("---- Single Train/Test Split ----")
+print("Predictions:", y_pred)
+print("RMSE:", rmse)
+print("R² Score:", r2 if r2 is not None else "Not defined (only 1 test sample)")
+
+# -------------------------
+# K-Fold Cross Validation (without sklearn)
+# -------------------------
+def k_fold_cross_val(X, y, k=3):
+    fold_size = len(X) // k
+    rmses, r2s = [], []
+    
+    for i in range(k):
+        start, end = i * fold_size, (i + 1) * fold_size
+        X_test, y_test = X[start:end], y[start:end]
+        X_train = np.concatenate([X[:start], X[end:]], axis=0)
+        y_train = np.concatenate([y[:start], y[end:]], axis=0)
+        
+        # Add bias
+        X_train_b = np.c_[np.ones((X_train.shape[0], 1)), X_train]
+        X_test_b = np.c_[np.ones((X_test.shape[0], 1)), X_test]
+        
+        # Train
+        theta = np.linalg.pinv(X_train_b.T.dot(X_train_b)).dot(X_train_b.T).dot(y_train)
+        y_pred = X_test_b.dot(theta)
+        
+        # RMSE
+        rmse = np.sqrt(np.mean((y_test - y_pred) ** 2))
+        rmses.append(rmse)
+        
+        # R²
+        if len(y_test) > 1:
+            ss_total = np.sum((y_test - np.mean(y_test)) ** 2)
+            ss_res = np.sum((y_test - y_pred) ** 2)
+            r2 = 1 - (ss_res / ss_total)
+            r2s.append(r2)
+    
+    return np.mean(rmses), np.mean(r2s) if r2s else None
+
+avg_rmse, avg_r2 = k_fold_cross_val(X, y, k=3)
+
+print("\n---- 3-Fold Cross Validation ----")
+print("Average RMSE:", avg_rmse)
+print("Average R²:", avg_r2 if avg_r2 is not None else "Not defined")
